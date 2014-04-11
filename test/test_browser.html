@@ -27,6 +27,26 @@
     }());
     </script>
     <script>
+    var initSauceLabs = function () {};
+    (function () {
+      if (!(typeof Spec == "object" && Spec)) {
+        return;
+      }
+
+      if (queryParams && Spec.hasKey(queryParams, "saucelabs")) {
+        var data = [];
+        initSauceLabs = function (testSuite) {
+          testSuite.on("all", Newton.createTAP(function (message) {
+            data.push(message);
+            if (/^\d+..\d+$/.test(message)) {
+              output.innerHTML = data.join('\n');
+            }
+          }));
+        };
+      }
+    }());
+    </script>
+    <script>
     var libraryPath, isAMD, addNoConflictTest;
     (function (root) {
       if (!(typeof Spec == "object" && Spec || typeof Newton == "object" && Newton)) {
@@ -68,6 +88,7 @@
   </head>
   <body>
     <div id="suite"></div>
+    <pre id="output" style="display: none"></pre>
     <script>
     (function (root) {
       if (!(typeof Spec == "object" && Spec || typeof Newton == "object" && Newton)) {
@@ -92,11 +113,13 @@
             test.equal(JSON3.stringify(1), "1", "JSON 3 should be exported as an asynchronous module");
             test.done(2);
           });
+          initSauceLabs(testSuite);
           addNoConflictTest(testSuite);
           testSuite.run();
         });
       } else {
         var testSuite = root.JSON3.testSuite;
+        initSauceLabs(testSuite);
         addNoConflictTest(testSuite);
         testSuite.run();
       }

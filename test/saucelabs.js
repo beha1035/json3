@@ -21,7 +21,7 @@
       chalk = require('chalk'),
       ecstatic = require('ecstatic'),
       request = require('request'),
-      SauceTunnel = require('sauce-tunnel'),
+      SauceTunnel = require('sauce-tunnel-sc3-1'),
       wd = require('wd'),
       wdTap = require('wd-tap');
 
@@ -62,7 +62,6 @@
   var advisor = getOption('advisor', true),
       build = getOption('build', env.TRAVIS_COMMIT.slice(0, 10)),
       compatMode = getOption('compatMode', null),
-      customData = Function('return {' + getOption('customData', '').replace(/^\{|}$/g, '') + '}')(),
       idleTimeout = getOption('idleTimeout', 180),
       jobName = getOption('name', 'unit tests'),
       maxDuration = getOption('maxDuration', 360),

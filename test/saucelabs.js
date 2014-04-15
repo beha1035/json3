@@ -209,13 +209,6 @@
 
   /*--------------------------------------------------------------------------*/
 
-  function check() {
-    request.post('https://saucelabs.com/rest/v1/' + this.user + '/js-tests/status', {
-      'auth': { 'user': this.user, 'pass': this.pass },
-      'json': { 'js tests': [this.id] }
-    }, onCheck.bind(this));
-  }
-
   function onCheck(error, response, body) {
     var data = _.result(body, 'js tests', [{}])[0],
         options = this.options,
@@ -280,15 +273,32 @@
   Job.prototype = _.create(EventEmitter.prototype);
 
   Job.prototype.run = function() {
-    var browser = wd.remote("ondemand.saucelabs.com", 80, SAUCE_USERNAME, SAUCE_ACCESS_KEY);
-    browser.init(this.options, function(err) {
+    var self = this;
+    var browser = wd.remote('ondemand.saucelabs.com', 80, username, accessKey);
+    browser.init(this.options, function(err, sessionId) {
       if (err) {
         console.error(err);
       }
       wdTap(runnerUrl, browser, function(err, results) {
-        if (!results.ok) {
-          console.error('tests failed: ' + this.options)
+        if (!(results && results.ok)) {
+          console.error('Tests failed: ' + JSON.stringify(self.options));
         }
+        console.log(JSON.stringify(results));
+        request.post('https://saucelabs.com/rest/v1/' + username + '/jobs/' + sessionId, {
+          'auth': {
+            'user': username,
+            'pass': accessKey
+          },
+          'passed': !!(results && results.ok)
+        }, function(err, response, body) {
+          if (err) {
+            console.error(error);
+          } else {
+            console.log('Posted results to Sauce Labs');
+          }
+          self.emit('complete');
+          browser.quit();
+        })
       })
     });
   };

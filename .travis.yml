@@ -29,7 +29,7 @@ branches:
   - dev
   - saucelabs
 before_install:
-- '[ $SAUCE_LABS == false ] || npm i chalk@"~0.4.0" ecstatic@"~0.4.0" request@"~2.34.0" sauce-tunnel-sc3-1@"~1.0.0" lodash@"git://github.com/lodash/lodash.git#61199083688589f572a6444d0d4ed34bb6f7a572" wd@"~0.2.17" wd-tap@"~0.1.0"'
+- '[ $SAUCE_LABS == false ] || npm i chalk@"~0.4.0" ecstatic@"~0.4.0" request@"~2.34.0" sauce-tunnel-sc3-1@"~1.0.0" lodash@"git://github.com/lodash/lodash.git#61199083688589f572a6444d0d4ed34bb6f7a572" wd@"~0.2.17"'
 - '[ $BIN == ''istanbul'' ] && npm i -g istanbul@"~0.1.0" || true'
 - '[ $BIN == ''narwhal'' ] && wget https://github.com/280north/narwhal/archive/v0.3.2.zip
   && sudo unzip v0.3.2 -d /opt/ && rm v0.3.2.zip || true'
@@ -48,5 +48,5 @@ install: true
 script:
 - '[ $BIN == ''istanbul'' ] && $BIN cover ./test/test_json3.js || true'
 - '[ $BIN != ''istanbul'' ] && [ $SAUCE_LABS == false ] && cd test && $BIN ./test_json3.js || true'
-- '[ $SAUCE_LABS == false ] || ($BIN ./test/saucelabs.js name="json3 tests" runner="test/test_browser.html?saucelabs=true" tags="development" recordScreenshots="true")'
-- '[ $SAUCE_LABS == false ] || ($BIN ./test/saucelabs.js name="json3 tests" runner="test/test_browser.html?saucelabs=true&minified=true" tags="minified" recordScreenshots="true")'
+- '[ $SAUCE_LABS == false ] || ($BIN ./test/saucelabs.js name="json3 tests" runner="test/test_browser.html?saucelabs=true" tags="development" recordScreenshots="true" tunneled="true")'
+- '[ $SAUCE_LABS == false ] || ($BIN ./test/saucelabs.js name="json3 tests" runner="test/test_browser.html?saucelabs=true&minified=true" tags="minified" recordScreenshots="true" tunneled="true")'

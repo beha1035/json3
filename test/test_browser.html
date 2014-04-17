@@ -27,21 +27,36 @@
     }());
     </script>
     <script>
-    var initSauceLabs = function () {};
+    var spec_tests = {
+      completed: false,
+      passed: null,
+      failures: []
+    }, initSauceLabs = function () {};
+
     (function () {
-      if (!(typeof Spec == "object" && Spec)) {
+      if (!(typeof Spec == "object" && Spec || typeof Newton == "object" && Newton)) {
         return;
       }
 
       if (queryParams && Spec.hasKey(queryParams, "saucelabs")) {
-        var data = [];
+        var currentTest = '';
         initSauceLabs = function (testSuite) {
-          testSuite.on("all", Newton.createTAP(function (message) {
-            data.push(message);
-            if (/^\d+..\d+$/.test(message)) {
-              output.innerHTML = data.join('\n');
+          testSuite.on("all", function (event) {
+            switch (event.type) {
+              case "setup":
+                currentTest = event.target.name;
+                break;
+              case "failure":
+                spec_tests.failures.push(Newton.substitute("Test: %s: Failure: %s. Expected: %o. Actual: %o.", currentTest, event.message, event.expected, event.actual));
+                break;
+              case "complete":
+                spec_tests.passed = !spec_tests.failures.length;
+                spec_tests.completed = true;
+                break;
+              default:
+                break;
             }
-          }));
+          });
         };
       }
     }());
@@ -88,7 +103,6 @@
   </head>
   <body>
     <div id="suite"></div>
-    <pre id="output" style="display: none"></pre>
     <script>
     (function (root) {
       if (!(typeof Spec == "object" && Spec || typeof Newton == "object" && Newton)) {

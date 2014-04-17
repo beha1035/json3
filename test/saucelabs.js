@@ -22,8 +22,7 @@
       ecstatic = require('ecstatic'),
       request = require('request'),
       SauceTunnel = require('sauce-tunnel-sc3-1'),
-      wd = require('wd'),
-      wdTap = require('wd-tap');
+      wd = require('wd');
 
   /** Used for Sauce Labs credentials */
   var accessKey = env.SAUCE_ACCESS_KEY,
@@ -62,10 +61,10 @@
   var advisor = getOption('advisor', true),
       build = getOption('build', env.TRAVIS_COMMIT.slice(0, 10)),
       compatMode = getOption('compatMode', null),
-      idleTimeout = getOption('idleTimeout', 180),
+      idleTimeout = getOption('idleTimeout', 300),
       jobName = getOption('name', 'unit tests'),
       maxDuration = getOption('maxDuration', 360),
-      port = ports[Math.min(_.sortedIndex(ports, getOption('port', 9001)), ports.length - 1)],
+      port = ports[Math.min(_.sortedIndex(ports, getOption('port', 8080)), ports.length - 1)],
       publicAccess = getOption('public', true),
       recordVideo = getOption('recordVideo', false),
       recordScreenshots = getOption('recordScreenshots', false),
@@ -129,6 +128,9 @@
   if (tunneled) {
     defaultOptions.tunnel = 'tunnel-identifier:' + tunnelId;
   }
+
+  console.log(tunneled, port);
+  var currentJobs = 0;
 
   /*--------------------------------------------------------------------------*/
 
@@ -209,98 +211,90 @@
 
   /*--------------------------------------------------------------------------*/
 
-  function onCheck(error, response, body) {
-    var data = _.result(body, 'js tests', [{}])[0],
-        options = this.options,
-        platform = options.platforms[0],
-        result = data.result,
-        completed = _.result(body, 'completed'),
-        description = capitalizeWords(platform[1].replace('google', '')) + ' ' + platform[2] + ' on ' + capitalizeWords(platform[0]),
-        failures = _.result(result, 'failed'),
-        label = options.name + ':';
-
-    if (!completed) {
-      setTimeout(check.bind(this), statusInterval);
-      return;
-    }
-    if (!result || failures || reError.test(result.message)) {
-      if (this.attempts <= maxRetries) {
-        this.attempts++;
-        console.log(label + ' attempt %d', this.attempts);
-        this.run();
-        return;
-      }
-      _.assign(this, data, { 'failed': true });
-      var details = 'See ' + this.url + ' for details.';
-
-      logInline('');
-      if (failures) {
-        console.error(label + ' %s ' + chalk.red('failed') + ' %d test' + (failures > 1 ? 's' : '') + '. %s', description, failures, details);
-      } else {
-        var message = _.result(result, 'message', 'no results available. ' + details);
-
-        console.error(label, description, chalk.red('failed') + ';', message);
-      }
-    } else {
-      console.log(label, description, chalk.green('passed'));
-    }
-    this.emit('complete');
-  }
-
-  function onRun(error, response, body) {
-    var id = _.result(body, 'js tests', [])[0],
-        statusCode = _.result(response, 'statusCode');
-
-    if (error || !id || statusCode != 200) {
-      console.error('Failed to start job; status: %d, body:\n%s', statusCode, JSON.stringify(body));
-      if (error) {
-        console.error(error);
-      }
-      process.exit(3);
-    }
-    this.id = id;
-    check.call(this);
-  }
-
-  /*--------------------------------------------------------------------------*/
-
   function Job(options) {
     EventEmitter.call(this);
     _.merge(this, { 'attempts': 0, 'options': {} }, options);
     _.defaults(this.options, _.cloneDeep(defaultOptions));
+    options = this.options;
+    this.label = capitalizeWords(options.browserName.replace('google', '')) + ' ' + options.version + ' on ' + options.platform;
   }
 
   Job.prototype = _.create(EventEmitter.prototype);
 
   Job.prototype.run = function() {
-    var self = this;
-    var browser = wd.remote('ondemand.saucelabs.com', 80, username, accessKey);
+    if (currentJobs > 3) {
+      setTimeout(this.run.bind(this), 10000);
+      return;
+    }
+    currentJobs++;
+    var browser = wd.remote('ondemand.saucelabs.com', 80, this.user, this.pass);
+
     browser.init(this.options, function(err, sessionId) {
+      this.id = sessionId;
+      if (err) { return this.reportError(err, browser); }
+
+      browser.get(runnerUrl, function(err) {
+        if (err) { return this.reportError(err, browser); }
+
+        browser.waitForConditionInBrowser('window.spec_tests.completed === true', 10000, 200, function(err, bool) {
+          if (err || !bool) { return this.reportError(err || new Error('Falsey result for condition'), browser); }
+
+          browser.safeEval('window.spec_tests', function(err, results) {
+            if (err) { return this.reportError(err, browser); }
+            if (!results) { return this.reportError(new Error('No results'), browser); }
+            if (!results.passed) { return this.reportError(new Error('Tests failed'), browser, results.failures); }
+
+            this.reportSuccess(browser);
+          }.bind(this));
+        }.bind(this));
+      }.bind(this));
+    }.bind(this));
+  };
+
+  Job.prototype.reportError = function(err, browser, failures) {
+    this.reportStatus(browser, {
+      'passed': false,
+      'custom-data': { 'error': JSON.stringify(err), 'failures': failures }
+    }, function(err) {
       if (err) {
         console.error(err);
       }
-      wdTap(runnerUrl, browser, function(err, results) {
-        if (!(results && results.ok)) {
-          console.error('Tests failed: ' + JSON.stringify(self.options));
-        }
-        console.log(JSON.stringify(results));
-        request.post('https://saucelabs.com/rest/v1/' + username + '/jobs/' + sessionId, {
-          'auth': {
-            'user': username,
-            'pass': accessKey
-          },
-          'passed': !!(results && results.ok)
-        }, function(err, response, body) {
-          if (err) {
-            console.error(error);
-          } else {
-            console.log('Posted results to Sauce Labs');
-          }
-          self.emit('complete');
-          browser.quit();
-        })
-      })
+      if (this.attempts <= maxRetries) {
+        this.attempts++;
+        console.log(this.label + ': Attempt %d', this.attempts);
+        this.run();
+        return;
+      }
+      _.assign(this, data, { 'failed': true });
+      console.log(this.label, ' ', chalk.red('failed'));
     });
+  };
+
+  Job.prototype.reportSuccess = function(browser) {
+    this.reportStatus(browser, {
+      'passed': true
+    }, function(err) {
+      if (err) {
+        console.error(err);
+      }
+      console.log(this.label, ' ', chalk.green('passed'));
+    });
+  };
+
+  Job.prototype.reportStatus = function(browser, data, callback) {
+    request.post('https://saucelabs.com/rest/v1/' + this.user + '/jobs/' + this.id, {
+      'auth': { 'user': this.user, 'pass': this.pass },
+      'json': data
+    }, function(err, response, body) {
+      var statusCode = _.result(response, 'statusCode');
+      if (statusCode != 200) {
+        err || err = new Error('Status: ' + statusCode);
+      }
+      browser.quit();
+      callback.call(this, err);
+      currentJobs--;
+      this.emit('complete');
+    }.bind(this));
   };
 
   /*--------------------------------------------------------------------------*/

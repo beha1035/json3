@@ -288,7 +288,7 @@
     }, function(err, response, body) {
       var statusCode = _.result(response, 'statusCode');
       if (statusCode != 200) {
-        err || err = new Error('Status: ' + statusCode);
+        err || (err = new Error('Status: ' + statusCode));
       }
       browser.quit();
       callback.call(this, err);

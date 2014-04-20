@@ -50,3 +50,4 @@ script:
 - '[ $BIN != ''istanbul'' ] && [ $SAUCE_LABS == false ] && cd test && $BIN ./test_json3.js || true'
 - '[ $SAUCE_LABS == false ] || ($BIN ./test/saucelabs.js name="json3 tests" runner="test/test_browser.html?saucelabs=true" tags="development" recordScreenshots="true" tunneled="true")'
 - '[ $SAUCE_LABS == false ] || ($BIN ./test/saucelabs.js name="json3 tests" runner="test/test_browser.html?saucelabs=true&minified=true" tags="minified" recordScreenshots="true" tunneled="true")'
+- '[ $SAUCE_LABS == false ] || cat ./sauce_connect.log'

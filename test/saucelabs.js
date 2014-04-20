@@ -129,7 +129,6 @@
     defaultOptions.tunnel = 'tunnel-identifier:' + tunnelId;
   }
 
-  console.log(tunneled, port);
   var currentJobs = 0;
 
   /*--------------------------------------------------------------------------*/
@@ -222,7 +221,7 @@
   Job.prototype = _.create(EventEmitter.prototype);
 
   Job.prototype.run = function() {
-    if (currentJobs > 3) {
+    if (currentJobs >= 3) {
       setTimeout(this.run.bind(this), 10000);
       return;
     }
@@ -261,11 +260,12 @@
       }
       if (this.attempts <= maxRetries) {
         this.attempts++;
+        currentJobs--;
         console.log(this.label + ': Attempt %d', this.attempts);
         this.run();
         return;
       }
-      _.assign(this, data, { 'failed': true });
+      this.failed = true;
       console.log(this.label, ' ', chalk.red('failed'));
     });
   };
@@ -276,24 +276,27 @@
     }, function(err) {
       if (err) {
         console.error(err);
+        _.assign(this, { 'failed': true });
+        console.log(this.label, ' ', chalk.red('failed'));
+        return;
       }
       console.log(this.label, ' ', chalk.green('passed'));
     });
   };
 
   Job.prototype.reportStatus = function(browser, data, callback) {
-    request.post('https://saucelabs.com/rest/v1/' + this.user + '/jobs/' + this.id, {
-      'auth': { 'user': this.user, 'pass': this.pass },
+    request.put('https://' + this.user + ':' + this.pass + '@saucelabs.com/rest/v1/' + this.user + '/jobs/' + this.id, {
       'json': data
     }, function(err, response, body) {
       var statusCode = _.result(response, 'statusCode');
       if (statusCode != 200) {
         err || (err = new Error('Status: ' + statusCode));
       }
-      browser.quit();
-      callback.call(this, err);
-      currentJobs--;
-      this.emit('complete');
+      browser.quit(function() {
+        callback.call(this, err);
+        currentJobs--;
+        this.emit('complete');
+      }.bind(this));
     }.bind(this));
   };
 
